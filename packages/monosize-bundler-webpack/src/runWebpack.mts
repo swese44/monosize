@@ -5,7 +5,10 @@ import type { Configuration as WebpackConfiguration } from 'webpack';
 
 import { WebpackBundlerOptions } from './types.mjs';
 
-function createWebpackConfig(fixturePath: string, outputPath: string, debug: boolean): WebpackConfiguration {
+/**
+ * Creates the base Webpack configuration shared by both single and multi-entry builds.
+ */
+function createBaseWebpackConfig(debug: boolean): Partial<WebpackConfiguration> {
   return {
     name: 'client',
     target: 'web',
@@ -19,15 +22,6 @@ function createWebpackConfig(fixturePath: string, outputPath: string, debug: boo
       'react-dom': 'ReactDOM',
     },
 
-    entry: fixturePath,
-    output: {
-      filename: path.basename(outputPath),
-      path: path.dirname(outputPath),
-
-      ...(debug && {
-        pathinfo: true,
-      }),
-    },
     performance: {
       hints: false,
     },
@@ -59,6 +53,22 @@ function createWebpackConfig(fixturePath: string, outputPath: string, debug: boo
   };
 }
 
+function createWebpackConfig(fixturePath: string, outputPath: string, debug: boolean): WebpackConfiguration {
+  return {
+    ...createBaseWebpackConfig(debug),
+
+    entry: fixturePath,
+    output: {
+      filename: path.basename(outputPath),
+      path: path.dirname(outputPath),
+
+      ...(debug && {
+        pathinfo: true,
+      }),
+    },
+  } as WebpackConfiguration;
+}
+
 function createMultiEntryWebpackConfig(
   fixtures: Array<{ fixturePath: string; outputPath: string }>,
   debug: boolean,
@@ -84,17 +94,7 @@ function createMultiEntryWebpackConfig(
   const outputDir = path.dirname(fixtures[0].outputPath);
 
   return {
-    name: 'client',
-    target: 'web',
-    mode: 'production',
-
-    cache: {
-      type: 'memory',
-    },
-    externals: {
-      react: 'React',
-      'react-dom': 'ReactDOM',
-    },
+    ...createBaseWebpackConfig(debug),
 
     entry,
     output: {
@@ -105,35 +105,7 @@ function createMultiEntryWebpackConfig(
         pathinfo: true,
       }),
     },
-    performance: {
-      hints: false,
-    },
-    optimization: {
-      minimizer: [
-        new TerserWebpackPlugin({
-          extractComments: false,
-          terserOptions: {
-            format: {
-              comments: false,
-            },
-          },
-        }),
-      ],
-
-      // If debug mode is enabled, we want to disable minification and rely on Terser to produce a partially minified
-      // file for debugging purposes
-      ...(debug && {
-        minimize: false,
-        minimizer: [],
-      }),
-    },
-
-    ...(debug && {
-      stats: {
-        optimizationBailout: true,
-      },
-    }),
-  };
+  } as WebpackConfiguration;
 }
 
 type RunWebpackOptions = {
