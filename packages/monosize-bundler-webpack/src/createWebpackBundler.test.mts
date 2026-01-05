@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import tmp from 'tmp';
 import { beforeEach, describe, expect, it, vitest } from 'vitest';
 
@@ -26,6 +27,37 @@ async function setup(fixtureContent: string): Promise<string> {
   await fs.promises.writeFile(fixture.name, fixtureContent);
 
   return fixture.name;
+}
+
+async function setupMultiple(
+  fixtures: Array<{ name: string; content: string }>,
+): Promise<{ dir: string; fixtures: Array<{ name: string; path: string }> }> {
+  const packageDir = tmp.dirSync({
+    prefix: 'buildFixtures',
+    unsafeCleanup: true,
+  });
+
+  const spy = vitest.spyOn(process, 'cwd');
+  spy.mockReturnValue(packageDir.name);
+
+  const fixtureDir = tmp.dirSync({
+    dir: packageDir.name,
+    name: 'monosize',
+    unsafeCleanup: true,
+  });
+
+  const fixtureResults = await Promise.all(
+    fixtures.map(async ({ name, content }) => {
+      const fixture = tmp.fileSync({
+        dir: fixtureDir.name,
+        name: `${name}.fixture.js`,
+      });
+      await fs.promises.writeFile(fixture.name, content);
+      return { name, path: fixture.name };
+    }),
+  );
+
+  return { dir: fixtureDir.name, fixtures: fixtureResults };
 }
 
 const webpackBundler = createWebpackBundler(config => {
@@ -133,5 +165,123 @@ describe('buildFixture', () => {
         /******/ ();"
       `);
     });
+  });
+});
+
+describe('buildFixtures', () => {
+  beforeEach(() => {
+    vitest.resetAllMocks();
+  });
+
+  it('builds multiple fixtures in a single build', async () => {
+    const { fixtures } = await setupMultiple([
+      {
+        name: 'fixture1',
+        content: `
+          const hello = 'Hello';
+          console.log(hello);
+        `,
+      },
+      {
+        name: 'fixture2',
+        content: `
+          const world = 'World';
+          console.log(world);
+        `,
+      },
+      {
+        name: 'fixture3',
+        content: `
+          const test = 'Test';
+          console.log(test);
+        `,
+      },
+    ]);
+
+    const buildResults = await webpackBundler.buildFixtures!({
+      fixtures: fixtures.map(f => ({ fixturePath: f.path, name: f.name })),
+      debug: false,
+      quiet: true,
+    });
+
+    expect(buildResults).toHaveLength(3);
+
+    // Check that all files were created
+    expect(buildResults[0].name).toBe('fixture1');
+    expect(buildResults[0].outputPath).toMatch(/monosize[\\|/]fixture1\.output\.js/);
+    expect(await fs.promises.readFile(buildResults[0].outputPath, 'utf-8')).toMatchInlineSnapshot(
+      `"console.log("Hello");"`,
+    );
+
+    expect(buildResults[1].name).toBe('fixture2');
+    expect(buildResults[1].outputPath).toMatch(/monosize[\\|/]fixture2\.output\.js/);
+    expect(await fs.promises.readFile(buildResults[1].outputPath, 'utf-8')).toMatchInlineSnapshot(
+      `"console.log("World");"`,
+    );
+
+    expect(buildResults[2].name).toBe('fixture3');
+    expect(buildResults[2].outputPath).toMatch(/monosize[\\|/]fixture3\.output\.js/);
+    expect(await fs.promises.readFile(buildResults[2].outputPath, 'utf-8')).toMatchInlineSnapshot(
+      `"console.log("Test");"`,
+    );
+  });
+
+  it('builds multiple fixtures in debug mode', async () => {
+    const { fixtures } = await setupMultiple([
+      {
+        name: 'fixture1',
+        content: `
+          const tokens = { foo: 'foo' };
+          console.log(tokens.foo);
+        `,
+      },
+      {
+        name: 'fixture2',
+        content: `
+          const tokens = { bar: 'bar' };
+          console.log(tokens.bar);
+        `,
+      },
+    ]);
+
+    const buildResults = await webpackBundler.buildFixtures!({
+      fixtures: fixtures.map(f => ({ fixturePath: f.path, name: f.name })),
+      debug: true,
+      quiet: true,
+    });
+
+    expect(buildResults).toHaveLength(2);
+
+    // Check that debug files were created
+    expect(buildResults[0].debugOutputPath).toMatch(/monosize[\\|/]fixture1\.debug\.js/);
+    expect(buildResults[1].debugOutputPath).toMatch(/monosize[\\|/]fixture2\.debug\.js/);
+
+    // Verify debug files exist and contain content
+    const debugOutput1 = await fs.promises.readFile(buildResults[0].debugOutputPath!, 'utf-8');
+    const debugOutput2 = await fs.promises.readFile(buildResults[1].debugOutputPath!, 'utf-8');
+
+    expect(debugOutput1.length).toBeGreaterThan(0);
+    expect(debugOutput2.length).toBeGreaterThan(0);
+  });
+
+  it('should throw on compilation errors in any fixture', async () => {
+    const { fixtures } = await setupMultiple([
+      {
+        name: 'fixture1',
+        content: `console.log('valid');`,
+      },
+      {
+        name: 'fixture2',
+        content: `import something from 'unknown-pkg';`,
+      },
+    ]);
+
+    await expect(
+      webpackBundler.buildFixtures!({
+        fixtures: fixtures.map(f => ({ fixturePath: f.path, name: f.name })),
+        debug: false,
+        quiet: true,
+      }),
+    ).rejects.toBeDefined();
   });
 });

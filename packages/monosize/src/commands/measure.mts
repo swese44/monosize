@@ -16,10 +16,17 @@ export type MeasureOptions = CliOptions & {
   debug: boolean;
   'artifacts-location': string;
   fixtures: string;
+  'single-build': boolean;
 };
 
 async function measure(options: MeasureOptions) {
-  const { debug = false, quiet, 'artifacts-location': artifactsLocation, fixtures: fixturesGlob } = options;
+  const {
+    debug = false,
+    quiet,
+    'artifacts-location': artifactsLocation,
+    fixtures: fixturesGlob,
+    'single-build': singleBuild = false,
+  } = options;
 
   const startTime = timestamp();
   const artifactsDir = path.resolve(process.cwd(), artifactsLocation);
@@ -57,30 +64,74 @@ async function measure(options: MeasureOptions) {
     logger.info(`Measuring bundle size for ${fixtures.length} fixture(s)...`);
     logger.raw(fixtures.map(fixture => `  - ${fixture}`).join('\n'));
     logger.info(`Using ${config.bundler.name} as a bundler...`);
+    if (singleBuild && config.bundler.buildFixtures) {
+      logger.info('Using single-build mode...');
+    }
   }
 
-  for (const fixturePath of fixtures) {
-    const fixtureStartTime = process.hrtime();
+  // Use single build mode if requested and supported by the bundler
+  if (singleBuild && config.bundler.buildFixtures) {
+    const buildStartTime = process.hrtime();
 
-    const { artifactPath, name } = await prepareFixture(artifactsDir, fixturePath);
-    const { outputPath } = await config.bundler.buildFixture({
+    // Prepare all fixtures first
+    const preparedFixtures = await Promise.all(
+      fixtures.map(async fixturePath => {
+        const { artifactPath, name } = await prepareFixture(artifactsDir, fixturePath);
+        return { fixturePath: artifactPath, name, originalPath: fixturePath };
+      }),
+    );
+
+    // Build all fixtures at once
+    const buildResults = await config.bundler.buildFixtures({
+      fixtures: preparedFixtures.map(f => ({ fixturePath: f.fixturePath, name: f.name })),
       debug,
-      fixturePath: artifactPath,
       quiet,
     });
 
-    const minifiedSize = (await fs.promises.stat(outputPath)).size;
-    const gzippedSize = await gzipSizeFromFile(outputPath);
+    // Measure sizes for each output
+    for (let i = 0; i < buildResults.length; i++) {
+      const result = buildResults[i];
+      const { originalPath } = preparedFixtures[i];
 
-    measurements.push({
-      name,
-      path: path.relative(process.cwd(), fixturePath).replaceAll(path.sep, '/'),
-      minifiedSize,
-      gzippedSize,
-    });
+      const minifiedSize = (await fs.promises.stat(result.outputPath)).size;
+      const gzippedSize = await gzipSizeFromFile(result.outputPath);
+
+      measurements.push({
+        name: result.name,
+        path: path.relative(process.cwd(), originalPath).replaceAll(path.sep, '/'),
+        minifiedSize,
+        gzippedSize,
+      });
+    }
 
     if (!quiet) {
-      logger.info(`Fixture "${path.basename(fixturePath)}" built`, fixtureStartTime);
+      logger.info(`All ${fixtures.length} fixture(s) built in single build`, buildStartTime);
+    }
+  } else {
+    // Original loop-based approach
+    for (const fixturePath of fixtures) {
+      const fixtureStartTime = process.hrtime();
+
+      const { artifactPath, name } = await prepareFixture(artifactsDir, fixturePath);
+      const { outputPath } = await config.bundler.buildFixture({
+        debug,
+        fixturePath: artifactPath,
+        quiet,
+      });
+
+      const minifiedSize = (await fs.promises.stat(outputPath)).size;
+      const gzippedSize = await gzipSizeFromFile(outputPath);
+
+      measurements.push({
+        name,
+        path: path.relative(process.cwd(), fixturePath).replaceAll(path.sep, '/'),
+        minifiedSize,
+        gzippedSize,
+      });
+
+      if (!quiet) {
+        logger.info(`Fixture "${path.basename(fixturePath)}" built`, fixtureStartTime);
+      }
     }
   }
 
@@ -124,6 +175,12 @@ const api: CommandModule<Record<string, unknown>, MeasureOptions> = {
       type: 'string',
       description: 'Filename glob pattern to target whatever fixture files you want to measure.',
       default: '*.fixture.js',
+    },
+    'single-build': {
+      type: 'boolean',
+      description:
+        'If true and supported by the bundler, all fixtures will be built in a single bundler run with multiple entry points. Currently only supported by Webpack bundler. This can significantly reduce build time.',
+      default: false,
     },
   },
 };
