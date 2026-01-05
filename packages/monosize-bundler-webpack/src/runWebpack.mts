@@ -74,13 +74,13 @@ function createMultiEntryWebpackConfig(
   debug: boolean,
 ): WebpackConfiguration {
   // Build entry object with keys derived from output filenames
-  const entry = fixtures.reduce(
+  const entry = fixtures.reduce<Record<string, string>>(
     (acc, { fixturePath, outputPath }) => {
       const entryName = path.basename(outputPath, path.extname(outputPath));
       acc[entryName] = fixturePath;
       return acc;
     },
-    {} as Record<string, string>,
+    {},
   );
 
   // All fixtures should output to the same directory
