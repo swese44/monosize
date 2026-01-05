@@ -108,22 +108,12 @@ function createMultiEntryWebpackConfig(
   } as WebpackConfiguration;
 }
 
-type RunWebpackOptions = {
-  enhanceConfig: WebpackBundlerOptions;
-
-  fixturePath: string;
-  outputPath: string;
-
-  debug: boolean;
-  quiet: boolean;
-};
-
-export async function runWebpack(options: RunWebpackOptions): Promise<null> {
-  const { enhanceConfig, fixturePath, outputPath, debug } = options;
-  const webpackConfig = enhanceConfig(createWebpackConfig(fixturePath, outputPath, debug));
-
+/**
+ * Shared function to compile a webpack configuration.
+ */
+async function compileWebpackConfig(config: WebpackConfiguration): Promise<null> {
   return new Promise((resolve, reject) => {
-    const compiler = webpack(webpackConfig);
+    const compiler = webpack(config);
 
     compiler.run((err, result) => {
       if (err) {
@@ -138,6 +128,22 @@ export async function runWebpack(options: RunWebpackOptions): Promise<null> {
   });
 }
 
+type RunWebpackOptions = {
+  enhanceConfig: WebpackBundlerOptions;
+
+  fixturePath: string;
+  outputPath: string;
+
+  debug: boolean;
+  quiet: boolean;
+};
+
+export async function runWebpack(options: RunWebpackOptions): Promise<null> {
+  const { enhanceConfig, fixturePath, outputPath, debug } = options;
+  const webpackConfig = enhanceConfig(createWebpackConfig(fixturePath, outputPath, debug));
+  return compileWebpackConfig(webpackConfig);
+}
+
 type RunWebpackMultiEntryOptions = {
   enhanceConfig: WebpackBundlerOptions;
 
@@ -150,19 +156,5 @@ type RunWebpackMultiEntryOptions = {
 export async function runWebpackMultiEntry(options: RunWebpackMultiEntryOptions): Promise<null> {
   const { enhanceConfig, fixtures, debug } = options;
   const webpackConfig = enhanceConfig(createMultiEntryWebpackConfig(fixtures, debug));
-
-  return new Promise((resolve, reject) => {
-    const compiler = webpack(webpackConfig);
-
-    compiler.run((err, result) => {
-      if (err) {
-        reject(err);
-      }
-      if (result && result.hasErrors()) {
-        reject(result.compilation.errors.join('\n'));
-      }
-
-      resolve(null);
-    });
-  });
+  return compileWebpackConfig(webpackConfig);
 }
