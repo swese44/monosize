@@ -284,4 +284,92 @@ describe('buildFixtures', () => {
       }),
     ).rejects.toBeDefined();
   });
+
+  it('produces identical output whether using buildFixture or buildFixtures', async () => {
+    // Create test fixtures with realistic content
+    const fixtureContents = [
+      {
+        name: 'component1',
+        content: `
+          const Component1 = {
+            name: 'Component1',
+            value: 42,
+            render: function() {
+              return 'Hello from Component1: ' + this.value;
+            }
+          };
+          export default Component1;
+        `,
+      },
+      {
+        name: 'component2',
+        content: `
+          const Component2 = {
+            name: 'Component2',
+            data: [1, 2, 3, 4, 5],
+            process: function() {
+              return this.data.map(x => x * 2);
+            }
+          };
+          export default Component2;
+        `,
+      },
+      {
+        name: 'component3',
+        content: `
+          const Component3 = {
+            name: 'Component3',
+            greeting: 'World',
+            getMessage: function() {
+              return 'Hello, ' + this.greeting + '!';
+            }
+          };
+          export default Component3;
+        `,
+      },
+    ];
+
+    // Build using loop mode (buildFixture for each)
+    const { fixtures: loopFixtures } = await setupMultiple(fixtureContents);
+    const loopOutputs: Array<{ name: string; content: string }> = [];
+
+    for (const fixture of loopFixtures) {
+      const result = await webpackBundler.buildFixture({
+        fixturePath: fixture.path,
+        debug: false,
+        quiet: true,
+      });
+      const content = await fs.promises.readFile(result.outputPath, 'utf-8');
+      loopOutputs.push({ name: fixture.name, content });
+    }
+
+    // Build using single-build mode (buildFixtures)
+    const { fixtures: batchFixtures } = await setupMultiple(fixtureContents);
+    const batchResults = await webpackBundler.buildFixtures!({
+      fixtures: batchFixtures.map(f => ({ fixturePath: f.path, name: f.name })),
+      debug: false,
+      quiet: true,
+    });
+
+    const batchOutputs = await Promise.all(
+      batchResults.map(async result => ({
+        name: result.name,
+        content: await fs.promises.readFile(result.outputPath, 'utf-8'),
+      })),
+    );
+
+    // Sort both arrays by name to ensure consistent ordering
+    loopOutputs.sort((a, b) => a.name.localeCompare(b.name));
+    batchOutputs.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Verify we have the same number of outputs
+    expect(batchOutputs).toHaveLength(loopOutputs.length);
+
+    // Compare each output
+    for (let i = 0; i < loopOutputs.length; i++) {
+      expect(batchOutputs[i].name).toBe(loopOutputs[i].name);
+      // The bundle contents should be identical
+      expect(batchOutputs[i].content).toBe(loopOutputs[i].content);
+    }
+  });
 });
