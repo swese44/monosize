@@ -65,9 +65,18 @@ function createMultiEntryWebpackConfig(
 ): WebpackConfiguration {
   // Build entry object with unique keys for each fixture
   const entry: Record<string, string> = {};
-  fixtures.forEach(({ fixturePath, outputPath }) => {
+  const seenKeys = new Set<string>();
+
+  fixtures.forEach(({ fixturePath, outputPath }, index) => {
     // Use the output filename (without extension) as the entry key
-    const entryName = path.basename(outputPath, path.extname(outputPath));
+    let entryName = path.basename(outputPath, path.extname(outputPath));
+
+    // Handle potential collisions by appending index
+    if (seenKeys.has(entryName)) {
+      entryName = `${entryName}_${index}`;
+    }
+
+    seenKeys.add(entryName);
     entry[entryName] = fixturePath;
   });
 
