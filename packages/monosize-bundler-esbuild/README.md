@@ -49,9 +49,7 @@ export default {
 };
 ```
 
-## Performance Optimization
-
-### Single Build Mode
+#### Single Build Mode
 
 Runs a single build with multiple entry points. 6-7x faster for typical scenarios.
 
