@@ -54,31 +54,8 @@ export default {
 
 ### Single Build Mode
 
-The Rsbuild (Rspack) bundler supports a single-build mode that can significantly improve build performance when measuring multiple fixtures. Instead of running a separate Rsbuild build for each fixture, this mode runs a single build with multiple entry points.
-
-To enable single-build mode, use the `--single-build` flag with the `measure` command:
+Runs a single build with multiple entry points. 8-14x faster for typical scenarios.
 
 ```sh
 monosize measure --single-build
-```
-
-**Performance benefits:**
-- Significant speedup for typical monorepo scenarios
-- Reduced overhead from Rsbuild initialization and configuration
-- Single shared cache and compilation context
-
-**When to use:**
-- Large monorepos with many fixtures
-- CI/CD pipelines where build time matters
-- Local development for faster feedback
-
-**Example:**
-
-```sh
-# Standard mode (builds each fixture separately)
-monosize measure
-
-# Single-build mode (builds all fixtures together)
-monosize measure --single-build
-# Significantly faster
 ```
