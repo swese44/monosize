@@ -1,6 +1,5 @@
 /**
  * Performance comparison test for single-build vs standard loop mode.
- * This test is skipped by default but can be run manually to benchmark performance.
  */
 import fs from 'node:fs';
 import tmp from 'tmp';
@@ -148,7 +147,7 @@ async function setupTest({ fixtureCount }: SetupTestOptions): Promise<SetupTestR
   return { loopDuration, singleBuildDuration, speedup, timeSaved };
 }
 
-describe.skip('Performance Comparison', () => {
+describe('Performance Comparison', () => {
   it('compares single-build vs loop mode for 10 fixtures', async () => {
     const { loopDuration, singleBuildDuration } = await setupTest({ fixtureCount: 10 });
 
