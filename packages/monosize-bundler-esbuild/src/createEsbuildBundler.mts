@@ -26,21 +26,18 @@ export function createEsbuildBundler(configEnhancerCallback = DEFAULT_CONFIG_ENH
     buildFixtures: async function (options) {
       const { fixtures, quiet } = options;
 
-      // Prepare output paths for all fixtures
       const fixturesWithPaths = fixtures.map(({ fixturePath, name }) => ({
         fixturePath,
         name,
         outputPath: fixturePath.replace(/\.fixture.js$/, '.output.js'),
       }));
 
-      // Build all fixtures in a single esbuild run
       await runEsbuildMultiEntry({
         enhanceConfig: configEnhancerCallback,
         fixtures: fixturesWithPaths.map(f => ({ fixturePath: f.fixturePath, outputPath: f.outputPath })),
         quiet,
       });
 
-      // Note: esbuild bundler doesn't support debug mode, so we don't handle it here
       return fixturesWithPaths.map(({ name, outputPath }) => ({
         name,
         outputPath,
