@@ -82,5 +82,3 @@ monosize measure
 monosize measure --single-build
 # Takes: ~160ms for 10 fixtures (7.5x faster)
 ```
-
-Note: Single-build mode is now available for all bundlers (Webpack, esbuild, and Rsbuild).
