@@ -177,7 +177,7 @@ Produces a report file (`dist/bundle-size/monosize.json`) that is used by other 
 
 - `artifacts-location` - defines relative path from the package root where the artifact files will be stored (`monosize.json` & bundler output). If specified, `--report-files-glob` in `monosize collect-reports` & `monosize upload-reports` should be set accordingly.
 - `fixtures` - optional argument to pass a fixture filename or globbing pattern. If not specified, all fixture files matching a `*.fixture.js` pattern will be measured.
-- `single-build` - if true, all fixtures will be built in a single bundler run with multiple entry points. This can provide 7-9x performance improvement. Default: `false`.
+- `single-build` - if true, all fixtures will be built in a single bundler run with multiple entry points. This can provide 3-15x performance improvement. Default: `false`.
 
 #### Examples
 

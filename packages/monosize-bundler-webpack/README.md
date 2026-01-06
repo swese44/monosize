@@ -53,7 +53,7 @@ export default {
 
 ### Single Build Mode
 
-Runs a single build with multiple entry points. 8-20x faster for typical scenarios.
+Runs a single build with multiple entry points. 3-15x faster for typical scenarios.
 
 ```sh
 monosize measure --single-build
