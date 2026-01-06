@@ -1,32 +1,12 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import tmp from 'tmp';
 import { beforeEach, describe, expect, it, vitest } from 'vitest';
 
 import { createWebpackBundler } from './createWebpackBundler.mjs';
 
 async function setup(fixtureContent: string): Promise<string> {
-  const packageDir = tmp.dirSync({
-    prefix: 'buildFixture',
-    unsafeCleanup: true,
-  });
-
-  const spy = vitest.spyOn(process, 'cwd');
-  spy.mockReturnValue(packageDir.name);
-
-  const fixtureDir = tmp.dirSync({
-    dir: packageDir.name,
-    name: 'monosize',
-    unsafeCleanup: true,
-  });
-  const fixture = tmp.fileSync({
-    dir: fixtureDir.name,
-    name: 'test.fixture.js',
-  });
-
-  await fs.promises.writeFile(fixture.name, fixtureContent);
-
-  return fixture.name;
+  const { fixtures } = await setupMultiple([{ name: 'test', content: fixtureContent }]);
+  return fixtures[0].path;
 }
 
 async function setupMultiple(
@@ -106,15 +86,15 @@ describe('buildFixture', () => {
   describe('debug mode', () => {
     it('does not output additional files when disabled', async () => {
       const fixturePath = await setup(`
-      const tokens = {
-        foo: 'foo',
-        bar: 'bar',
-      };
-      function foo () { return tokens.foo; }
-      const bar = 1;
+        const tokens = {
+          foo: 'foo',
+          bar: 'bar',
+        };
+        function foo () { return tokens.foo; }
+        const bar = 1;
 
-      console.log(foo);
-    `);
+        console.log(foo);
+      `);
       const buildResult = await webpackBundler.buildFixture({
         debug: false,
         fixturePath,
@@ -130,15 +110,15 @@ describe('buildFixture', () => {
 
     it('provides partially minified output when enabled', async () => {
       const fixturePath = await setup(`
-      const tokens = {
-        foo: 'foo',
-        bar: 'bar',
-      };
-      function foo () { return tokens.foo; }
-      const bar = 1;
+        const tokens = {
+          foo: 'foo',
+          bar: 'bar',
+        };
+        function foo () { return tokens.foo; }
+        const bar = 1;
 
-      console.log(foo);
-    `);
+        console.log(foo);
+      `);
       const buildResult = await webpackBundler.buildFixture({
         debug: true,
         fixturePath,
@@ -178,22 +158,32 @@ describe('buildFixtures', () => {
       {
         name: 'fixture1',
         content: `
-          const hello = 'Hello';
-          console.log(hello);
+          const tokens1 = {
+            foo: 'foo',
+            bar: 'bar',
+          };
+          function foo1 () { return tokens1.foo; }
+          const bar1 = 1;
+
+          console.log(foo1);
         `,
       },
       {
         name: 'fixture2',
         content: `
-          const world = 'World';
-          console.log(world);
+          const hello2 = 'Hello2';
+          const world2 = 'world2';
+
+          console.log(hello2);
         `,
       },
       {
         name: 'fixture3',
         content: `
-          const test = 'Test';
-          console.log(test);
+          const hello3 = 'Hello3';
+          const world3 = 'world3';
+
+          console.log(hello3);
         `,
       },
     ]);
@@ -210,19 +200,19 @@ describe('buildFixtures', () => {
     expect(buildResults[0].name).toBe('fixture1');
     expect(buildResults[0].outputPath).toMatch(/monosize[\\|/]fixture1\.output\.js/);
     expect(await fs.promises.readFile(buildResults[0].outputPath, 'utf-8')).toMatchInlineSnapshot(
-      `"console.log("Hello");"`,
+      `"(()=>{const o="foo";console.log((function(){return o}))})();"`,
     );
 
     expect(buildResults[1].name).toBe('fixture2');
     expect(buildResults[1].outputPath).toMatch(/monosize[\\|/]fixture2\.output\.js/);
     expect(await fs.promises.readFile(buildResults[1].outputPath, 'utf-8')).toMatchInlineSnapshot(
-      `"console.log("World");"`,
+      `"console.log("Hello2");"`,
     );
 
     expect(buildResults[2].name).toBe('fixture3');
     expect(buildResults[2].outputPath).toMatch(/monosize[\\|/]fixture3\.output\.js/);
     expect(await fs.promises.readFile(buildResults[2].outputPath, 'utf-8')).toMatchInlineSnapshot(
-      `"console.log("Test");"`,
+      `"console.log("Hello3");"`,
     );
   });
 
@@ -231,16 +221,28 @@ describe('buildFixtures', () => {
       {
         name: 'fixture1',
         content: `
-          const tokens = { foo: 'foo' };
-          console.log(tokens.foo);
-        `,
+        const tokens1 = {
+          foo: 'foo',
+          bar: 'bar',
+        };
+        function foo1 () { return tokens1.foo; }
+        const bar1 = 1;
+
+        console.log(foo1);
+      `,
       },
       {
         name: 'fixture2',
         content: `
-          const tokens = { bar: 'bar' };
-          console.log(tokens.bar);
-        `,
+        const tokens2 = {
+          foo: 'foo',
+          bar: 'bar',
+        };
+        function foo2 () { return tokens2.foo; }
+        const bar2 = 1;
+
+        console.log(foo2);
+      `,
       },
     ]);
 
@@ -256,12 +258,30 @@ describe('buildFixtures', () => {
     expect(buildResults[0].debugOutputPath).toMatch(/monosize[\\|/]fixture1\.debug\.js/);
     expect(buildResults[1].debugOutputPath).toMatch(/monosize[\\|/]fixture2\.debug\.js/);
 
-    // Verify debug files exist and contain content
+    // Verify debug files exist and contain the expected content
     const debugOutput1 = await fs.promises.readFile(buildResults[0].debugOutputPath!, 'utf-8');
     const debugOutput2 = await fs.promises.readFile(buildResults[1].debugOutputPath!, 'utf-8');
 
-    expect(debugOutput1.length).toBeGreaterThan(0);
-    expect(debugOutput2.length).toBeGreaterThan(0);
+    expect(debugOutput1).toMatchInlineSnapshot(`
+      "/******/ (() => {
+          // webpackBootstrap
+          const tokens1_foo = "foo";
+          console.log((function() {
+              return tokens1_foo;
+          }));
+      })
+      /******/ ();"
+    `);
+    expect(debugOutput2).toMatchInlineSnapshot(`
+      "/******/ (() => {
+          // webpackBootstrap
+          const tokens2_foo = "foo";
+          console.log((function() {
+              return tokens2_foo;
+          }));
+      })
+      /******/ ();"
+    `);
   });
 
   it('should throw on compilation errors in any fixture', async () => {
@@ -286,7 +306,7 @@ describe('buildFixtures', () => {
   });
 
   it('produces identical output whether using buildFixture or buildFixtures', async () => {
-    // Create test fixtures with realistic content
+    // Create test fixtures with realistic content that produces output (side effects prevent tree-shaking)
     const fixtureContents = [
       {
         name: 'component1',
@@ -298,7 +318,7 @@ describe('buildFixtures', () => {
               return 'Hello from Component1: ' + this.value;
             }
           };
-          export default Component1;
+          console.log(Component1.render());
         `,
       },
       {
@@ -311,7 +331,7 @@ describe('buildFixtures', () => {
               return this.data.map(x => x * 2);
             }
           };
-          export default Component2;
+          console.log(Component2.process());
         `,
       },
       {
@@ -324,7 +344,7 @@ describe('buildFixtures', () => {
               return 'Hello, ' + this.greeting + '!';
             }
           };
-          export default Component3;
+          console.log(Component3.getMessage());
         `,
       },
     ];
@@ -362,13 +382,10 @@ describe('buildFixtures', () => {
     loopOutputs.sort((a, b) => a.name.localeCompare(b.name));
     batchOutputs.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Verify we have the same number of outputs
+    // Validate outputs are identical
     expect(batchOutputs).toHaveLength(loopOutputs.length);
-
-    // Compare each output
     for (let i = 0; i < loopOutputs.length; i++) {
       expect(batchOutputs[i].name).toBe(loopOutputs[i].name);
-      // The bundle contents should be identical
       expect(batchOutputs[i].content).toBe(loopOutputs[i].content);
     }
   });
