@@ -4,82 +4,15 @@ import type { BundlerAdapter, BundlerAdapterFactoryConfig } from 'monosize';
 
 const DEFAULT_CONFIG_ENHANCER: BundlerAdapterFactoryConfig<RsbuildConfig> = config => config;
 
-export function createEnvironmentConfig(params: {
-  fixturePath: string;
-  outputPath: string;
-  debugOutputPath?: string;
-}): Record<string, EnvironmentConfig> {
-  const { fixturePath, outputPath, debugOutputPath } = params;
-  const environmentConfig: EnvironmentConfig = {
-    source: {
-      entry: {
-        index: fixturePath,
-      },
-    },
-
-    output: {
-      externals: {
-        react: 'React',
-        'react-dom': 'ReactDOM',
-      },
-      target: 'web',
-
-      emitAssets: false,
-
-      filename: {
-        js: path.basename(outputPath),
-      },
-      distPath: {
-        root: path.dirname(outputPath),
-        js: './',
-      },
-
-      minify: true,
-    },
-
-    performance: {
-      chunkSplit: {
-        strategy: 'all-in-one',
-      },
-    },
-  };
+function createBaseEnvironmentConfig(params: {
+  entry: Record<string, string>;
+  outputDir: string;
+  filename: string;
+  minify: boolean;
+}): EnvironmentConfig {
+  const { entry, outputDir, filename, minify } = params;
 
   return {
-    default: environmentConfig,
-
-    ...(debugOutputPath && {
-      debug: {
-        ...environmentConfig,
-
-        output: {
-          ...environmentConfig.output,
-          filename: {
-            js: path.basename(debugOutputPath),
-          },
-          minify: false,
-        },
-      },
-    }),
-  };
-}
-
-export function createMultiEntryEnvironmentConfig(params: {
-  fixtures: Array<{ fixturePath: string; outputPath: string; debugOutputPath?: string }>;
-  debug: boolean;
-}): Record<string, EnvironmentConfig> {
-  const { fixtures, debug } = params;
-
-  // All fixtures should output to the same directory
-  const outputDir = path.dirname(fixtures[0].outputPath);
-
-  // Build entry object with keys derived from output filenames
-  const entry = fixtures.reduce<Record<string, string>>((acc, { fixturePath, outputPath }) => {
-    const entryName = path.basename(outputPath, path.extname(outputPath));
-    acc[entryName] = fixturePath;
-    return acc;
-  }, {});
-
-  const environmentConfig: EnvironmentConfig = {
     source: {
       entry,
     },
@@ -94,14 +27,14 @@ export function createMultiEntryEnvironmentConfig(params: {
       emitAssets: false,
 
       filename: {
-        js: '[name].js',
+        js: filename,
       },
       distPath: {
         root: outputDir,
         js: './',
       },
 
-      minify: true,
+      minify,
     },
 
     performance: {
@@ -110,14 +43,62 @@ export function createMultiEntryEnvironmentConfig(params: {
       },
     },
   };
+}
 
-  if (!debug) {
-    return {
-      default: environmentConfig,
-    };
+export function createEnvironmentConfig(params: {
+  fixturePath: string;
+  outputPath: string;
+  debugOutputPath?: string;
+}): Record<string, EnvironmentConfig> {
+  const { fixturePath, outputPath, debugOutputPath } = params;
+
+  const defaultEnv = createBaseEnvironmentConfig({
+    entry: { index: fixturePath },
+    outputDir: path.dirname(outputPath),
+    filename: path.basename(outputPath),
+    minify: true,
+  });
+
+  if (!debugOutputPath) {
+    return { default: defaultEnv };
   }
 
-  // In debug mode, create debug entry with different output names
+  return {
+    default: defaultEnv,
+    debug: createBaseEnvironmentConfig({
+      entry: { index: fixturePath },
+      outputDir: path.dirname(debugOutputPath),
+      filename: path.basename(debugOutputPath),
+      minify: false,
+    }),
+  };
+}
+
+export function createMultiEntryEnvironmentConfig(params: {
+  fixtures: Array<{ fixturePath: string; outputPath: string; debugOutputPath?: string }>;
+  debug: boolean;
+}): Record<string, EnvironmentConfig> {
+  const { fixtures, debug } = params;
+
+  const outputDir = path.dirname(fixtures[0].outputPath);
+
+  const entry = fixtures.reduce<Record<string, string>>((acc, { fixturePath, outputPath }) => {
+    const entryName = path.basename(outputPath, path.extname(outputPath));
+    acc[entryName] = fixturePath;
+    return acc;
+  }, {});
+
+  const defaultEnv = createBaseEnvironmentConfig({
+    entry,
+    outputDir,
+    filename: '[name].js',
+    minify: true,
+  });
+
+  if (!debug) {
+    return { default: defaultEnv };
+  }
+
   const debugEntry = fixtures.reduce<Record<string, string>>((acc, { fixturePath, debugOutputPath }) => {
     if (debugOutputPath) {
       const entryName = path.basename(debugOutputPath, path.extname(debugOutputPath));
@@ -127,17 +108,13 @@ export function createMultiEntryEnvironmentConfig(params: {
   }, {});
 
   return {
-    default: environmentConfig,
-    debug: {
-      ...environmentConfig,
-      source: {
-        entry: debugEntry,
-      },
-      output: {
-        ...environmentConfig.output,
-        minify: false,
-      },
-    },
+    default: defaultEnv,
+    debug: createBaseEnvironmentConfig({
+      entry: debugEntry,
+      outputDir,
+      filename: '[name].js',
+      minify: false,
+    }),
   };
 }
 
