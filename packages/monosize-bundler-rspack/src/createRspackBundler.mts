@@ -181,7 +181,7 @@ export function createRspackBundler(configEnhancerCallback = DEFAULT_CONFIG_ENHA
     },
 
     buildFixtures: async function (options) {
-      const { debug, fixtures, quiet } = options;
+      const { debug, fixtures } = options;
 
       // Silence the default logger
       logger.level = 'error';
